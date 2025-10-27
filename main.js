@@ -122,9 +122,15 @@ if (args) {
                         proxies[onvifConfig.target.hostname] = {}
 
                     if (onvifConfig.ports.rtsp && onvifConfig.target.ports.rtsp)
-                        proxies[onvifConfig.target.hostname][onvifConfig.ports.rtsp] = onvifConfig.target.ports.rtsp;
+                        proxies[onvifConfig.target.hostname][onvifConfig.ports.rtsp] = {
+                            port: onvifConfig.target.ports.rtsp,
+                            hostname: server.getHostname()
+                        };
                     if (onvifConfig.ports.snapshot && onvifConfig.target.ports.snapshot)
-                        proxies[onvifConfig.target.hostname][onvifConfig.ports.snapshot] = onvifConfig.target.ports.snapshot;
+                        proxies[onvifConfig.target.hostname][onvifConfig.ports.snapshot] = {
+                            port: onvifConfig.target.ports.snapshot,
+                            hostname: server.getHostname()
+                        };
                 }
             } else {
                 logger.error(`Failed to find IP address for MAC address ${onvifConfig.mac}`)
@@ -143,8 +149,11 @@ if (args) {
         
         for (let destinationAddress in proxies) {
             for (let sourcePort in proxies[destinationAddress]) {
-                logger.info(`Starting tcp proxy from port ${sourcePort} to ${destinationAddress}:${proxies[destinationAddress][sourcePort]} ...`);
-                tcpProxy.createProxy(sourcePort, destinationAddress, proxies[destinationAddress][sourcePort]);
+                const proxyInfo = proxies[destinationAddress][sourcePort];
+                logger.info(`Starting tcp proxy from ${proxyInfo.hostname}:${sourcePort} to ${destinationAddress}:${proxyInfo.port} ...`);
+                tcpProxy.createProxy(sourcePort, destinationAddress, proxyInfo.port, {
+                    hostname: proxyInfo.hostname
+                });
                 logger.info('  Started!');
                 logger.info('');
             }
