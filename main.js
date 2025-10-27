@@ -1,5 +1,6 @@
 const tcpProxy = require('node-tcp-proxy');
 const onvifServer = require('./src/onvif-server');
+const discoveryServer = require('./src/discovery-server');
 const configBuilder = require('./src/config-builder');
 const package = require('./package.json');
 const argparse = require('argparse');
@@ -7,6 +8,15 @@ const readline = require('readline');
 const stream = require('stream');
 const yaml = require('yaml');
 const fs = require('fs');
+const util = require('util');
+
+// Polyfill for util.isDate (removed in Node.js 18+)
+if (!util.isDate) {
+    util.isDate = function(d) {
+        return d instanceof Date;
+    };
+}
+
 const simpleLogger = require('simple-node-logger');
 
 const parser = new argparse.ArgumentParser({
@@ -86,29 +96,49 @@ if (args) {
         }
 
         let proxies = {};
+        let servers = [];
+        const useDirectUrls = config.useDirectUrls || false;
+
+        if (useDirectUrls) {
+            logger.info('Direct URLs enabled - proxies will be bypassed');
+            logger.info('');
+        }
 
         for (let onvifConfig of config.onvif) {
-            let server = onvifServer.createServer(onvifConfig, logger);
+            let server = onvifServer.createServer(onvifConfig, logger, useDirectUrls);
             if (server.getHostname()) {
                 logger.info(`Starting virtual onvif server for ${onvifConfig.name} on ${onvifConfig.mac} ${server.getHostname()}:${onvifConfig.ports.server} ...`);
                 server.startServer();
-                server.startDiscovery();
                 if (args.debug)
                     server.enableDebugOutput();
                 logger.info('  Started!');
                 logger.info('');
 
-                if (!proxies[onvifConfig.target.hostname])
-                    proxies[onvifConfig.target.hostname] = {}
-                
-                if (onvifConfig.ports.rtsp && onvifConfig.target.ports.rtsp)
-                    proxies[onvifConfig.target.hostname][onvifConfig.ports.rtsp] = onvifConfig.target.ports.rtsp;
-                if (onvifConfig.ports.snapshot && onvifConfig.target.ports.snapshot)
-                    proxies[onvifConfig.target.hostname][onvifConfig.ports.snapshot] = onvifConfig.target.ports.snapshot;
+                servers.push(server);
+
+                // Only set up proxies if not using direct URLs
+                if (!useDirectUrls) {
+                    if (!proxies[onvifConfig.target.hostname])
+                        proxies[onvifConfig.target.hostname] = {}
+
+                    if (onvifConfig.ports.rtsp && onvifConfig.target.ports.rtsp)
+                        proxies[onvifConfig.target.hostname][onvifConfig.ports.rtsp] = onvifConfig.target.ports.rtsp;
+                    if (onvifConfig.ports.snapshot && onvifConfig.target.ports.snapshot)
+                        proxies[onvifConfig.target.hostname][onvifConfig.ports.snapshot] = onvifConfig.target.ports.snapshot;
+                }
             } else {
                 logger.error(`Failed to find IP address for MAC address ${onvifConfig.mac}`)
                 return -1;
             }
+        }
+
+        // Start centralized discovery server for all virtual devices
+        if (servers.length > 0) {
+            logger.info('Starting WS-Discovery server for all virtual devices ...');
+            const discovery = discoveryServer.createDiscoveryServer(servers, logger);
+            discovery.start();
+            logger.info('  Started!');
+            logger.info('');
         }
         
         for (let destinationAddress in proxies) {
