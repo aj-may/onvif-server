@@ -1,0 +1,83 @@
+[Unit]
+Description=ONVIF Virtual Network Setup
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+
+# Configure ARP settings
+ExecStart=/usr/sbin/sysctl -w net.ipv4.conf.all.arp_ignore=1
+ExecStart=/usr/sbin/sysctl -w net.ipv4.conf.all.arp_announce=2
+
+# Create virtual network interfaces with unique MAC addresses
+ExecStart=/usr/sbin/ip link add 200S-01 link eth0 address a2:a2:a2:a2:a2:01 type macvlan mode bridge
+ExecStart=/usr/sbin/ip link add 200S-02 link eth0 address a2:a2:a2:a2:a2:02 type macvlan mode bridge
+ExecStart=/usr/sbin/ip link add 200S-03 link eth0 address a2:a2:a2:a2:a2:03 type macvlan mode bridge
+ExecStart=/usr/sbin/ip link add 200S-04 link eth0 address a2:a2:a2:a2:a2:04 type macvlan mode bridge
+ExecStart=/usr/sbin/ip link add 300E-01 link eth0 address a2:a2:a2:a2:a2:05 type macvlan mode bridge
+ExecStart=/usr/sbin/ip link add 300E-02 link eth0 address a2:a2:a2:a2:a2:06 type macvlan mode bridge
+ExecStart=/usr/sbin/ip link add 300E-03 link eth0 address a2:a2:a2:a2:a2:07 type macvlan mode bridge
+ExecStart=/usr/sbin/ip link add 300E-04 link eth0 address a2:a2:a2:a2:a2:08 type macvlan mode bridge
+ExecStart=/usr/sbin/ip link add 300E-05 link eth0 address a2:a2:a2:a2:a2:09 type macvlan mode bridge
+ExecStart=/usr/sbin/ip link add 300E-06 link eth0 address a2:a2:a2:a2:a2:0A type macvlan mode bridge
+ExecStart=/usr/sbin/ip link add 300E-07 link eth0 address a2:a2:a2:a2:a2:0B type macvlan mode bridge
+ExecStart=/usr/sbin/ip link add 300E-08 link eth0 address a2:a2:a2:a2:a2:0C type macvlan mode bridge
+ExecStart=/usr/sbin/ip link add 300E-09 link eth0 address a2:a2:a2:a2:a2:0D type macvlan mode bridge
+ExecStart=/usr/sbin/ip link add 300E-10 link eth0 address a2:a2:a2:a2:a2:0E type macvlan mode bridge
+ExecStart=/usr/sbin/ip link add 300E-11 link eth0 address a2:a2:a2:a2:a2:0F type macvlan mode bridge
+
+# Assign static IP addresses
+ExecStart=/usr/sbin/ip addr add 192.168.1.184/24 dev 200S-01
+ExecStart=/usr/sbin/ip addr add 192.168.1.185/24 dev 200S-02
+ExecStart=/usr/sbin/ip addr add 192.168.1.186/24 dev 200S-03
+ExecStart=/usr/sbin/ip addr add 192.168.1.187/24 dev 200S-04
+ExecStart=/usr/sbin/ip addr add 192.168.1.193/24 dev 300E-01
+ExecStart=/usr/sbin/ip addr add 192.168.1.203/24 dev 300E-02
+ExecStart=/usr/sbin/ip addr add 192.168.1.196/24 dev 300E-03
+ExecStart=/usr/sbin/ip addr add 192.168.1.197/24 dev 300E-04
+ExecStart=/usr/sbin/ip addr add 192.168.1.205/24 dev 300E-05
+ExecStart=/usr/sbin/ip addr add 192.168.1.200/24 dev 300E-06
+ExecStart=/usr/sbin/ip addr add 192.168.1.201/24 dev 300E-07
+ExecStart=/usr/sbin/ip addr add 192.168.1.199/24 dev 300E-08
+ExecStart=/usr/sbin/ip addr add 192.168.1.202/24 dev 300E-09
+ExecStart=/usr/sbin/ip addr add 192.168.1.204/24 dev 300E-10
+ExecStart=/usr/sbin/ip addr add 192.168.1.198/24 dev 300E-11
+
+# Bring up the virtual interfaces
+ExecStart=/usr/sbin/ip link set 200S-01 up
+ExecStart=/usr/sbin/ip link set 200S-02 up
+ExecStart=/usr/sbin/ip link set 200S-03 up
+ExecStart=/usr/sbin/ip link set 200S-04 up
+ExecStart=/usr/sbin/ip link set 300E-01 up
+ExecStart=/usr/sbin/ip link set 300E-02 up
+ExecStart=/usr/sbin/ip link set 300E-03 up
+ExecStart=/usr/sbin/ip link set 300E-04 up
+ExecStart=/usr/sbin/ip link set 300E-05 up
+ExecStart=/usr/sbin/ip link set 300E-06 up
+ExecStart=/usr/sbin/ip link set 300E-07 up
+ExecStart=/usr/sbin/ip link set 300E-08 up
+ExecStart=/usr/sbin/ip link set 300E-09 up
+ExecStart=/usr/sbin/ip link set 300E-10 up
+ExecStart=/usr/sbin/ip link set 300E-11 up
+
+# Cleanup on stop - delete the virtual interfaces
+ExecStop=/usr/sbin/ip link delete 200S-01
+ExecStop=/usr/sbin/ip link delete 200S-02
+ExecStop=/usr/sbin/ip link delete 200S-03
+ExecStop=/usr/sbin/ip link delete 200S-04
+ExecStop=/usr/sbin/ip link delete 300E-01
+ExecStop=/usr/sbin/ip link delete 300E-02
+ExecStop=/usr/sbin/ip link delete 300E-03
+ExecStop=/usr/sbin/ip link delete 300E-04
+ExecStop=/usr/sbin/ip link delete 300E-05
+ExecStop=/usr/sbin/ip link delete 300E-06
+ExecStop=/usr/sbin/ip link delete 300E-07
+ExecStop=/usr/sbin/ip link delete 300E-08
+ExecStop=/usr/sbin/ip link delete 300E-09
+ExecStop=/usr/sbin/ip link delete 300E-10
+ExecStop=/usr/sbin/ip link delete 300E-11
+
+[Install]
+WantedBy=multi-user.target

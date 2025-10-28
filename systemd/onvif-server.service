@@ -1,0 +1,17 @@
+[Unit]
+Description=ONVIF Virtual Camera Server
+After=network-online.target onvif-virtual-network.service
+Wants=network-online.target
+Requires=onvif-virtual-network.service
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/onvif-server
+ExecStart=/usr/bin/node main.js /etc/onvif-server/config.yaml
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
