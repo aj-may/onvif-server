@@ -35,6 +35,28 @@ class OnvifServer {
         if (!this.config.hostname)
             this.config.hostname = getIpAddressFromMac(this.config.mac);
 
+        // Set default ports if not specified
+        if (!this.config.ports)
+            this.config.ports = {};
+        if (!this.config.ports.server)
+            this.config.ports.server = 80;
+        if (!this.config.ports.rtsp)
+            this.config.ports.rtsp = 554;
+
+        // Set default target ports if not specified
+        if (this.config.target) {
+            if (!this.config.target.ports)
+                this.config.target.ports = {};
+            if (!this.config.target.ports.rtsp)
+                this.config.target.ports.rtsp = 554;
+        }
+
+        // Set default quality values if not specified
+        if (this.config.highQuality && this.config.highQuality.quality === undefined)
+            this.config.highQuality.quality = 4;
+        if (this.config.lowQuality && this.config.lowQuality.quality === undefined)
+            this.config.lowQuality.quality = 1;
+
         this.videoSource = {
             attributes: {
                 token: 'video_src_token'
