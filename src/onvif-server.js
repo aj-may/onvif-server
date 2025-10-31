@@ -65,6 +65,46 @@ class OnvifServer {
             Resolution: { Width: this.config.highQuality.width, Height: this.config.highQuality.height }
         };
     
+        // Build MainStream profile with configurable encoding parameters
+        const mainStreamEncoderConfig = {
+            attributes: {
+                token: 'encoder_hq_config_token'
+            },
+            Name: 'CardinalHqCameraConfiguration',
+            UseCount: 1,
+            Encoding: this.config.highQuality.encoding || 'H264',
+            Resolution: {
+                Width: this.config.highQuality.width,
+                Height: this.config.highQuality.height
+            },
+            Quality: this.config.highQuality.quality,
+            RateControl: {
+                FrameRateLimit: this.config.highQuality.framerate,
+                EncodingInterval: this.config.highQuality.encodingInterval || 1,
+                BitrateLimit: this.config.highQuality.bitrate
+            },
+            SessionTimeout: 'PT1000S'
+        };
+
+        // Add codec-specific configuration
+        const encoding = this.config.highQuality.encoding || 'H264';
+        if (encoding === 'H264') {
+            mainStreamEncoderConfig.H264 = {
+                GovLength: this.config.highQuality.govLength || this.config.highQuality.framerate,
+                H264Profile: this.config.highQuality.profile || 'Main'
+            };
+        } else if (encoding === 'MPEG4') {
+            mainStreamEncoderConfig.MPEG4 = {
+                GovLength: this.config.highQuality.govLength || this.config.highQuality.framerate,
+                Mpeg4Profile: this.config.highQuality.profile || 'SP'
+            };
+        } else if (encoding === 'H265') {
+            // For H265, use Profile T style (generic fields) even though we're in Profile S
+            // This is a vendor extension approach
+            mainStreamEncoderConfig.GovLength = this.config.highQuality.govLength || this.config.highQuality.framerate;
+            mainStreamEncoderConfig.Profile = this.config.highQuality.profile || 'Main';
+        }
+
         this.profiles = [
             {
                 Name: 'MainStream',
@@ -80,33 +120,51 @@ class OnvifServer {
                     SourceToken: 'video_src_token',
                     Bounds: { attributes: { x: 0, y: 0, width: this.config.highQuality.width, height: this.config.highQuality.height } }
                 },
-                VideoEncoderConfiguration: {
-                    attributes: {
-                        token: 'encoder_hq_config_token'
-                    },
-                    Name: 'CardinalHqCameraConfiguration',
-                    UseCount: 1,
-                    Encoding: 'H264',
-                    Resolution: {
-                        Width: this.config.highQuality.width,
-                        Height: this.config.highQuality.height
-                    },
-                    Quality: this.config.highQuality.quality,
-                    RateControl: {
-                        FrameRateLimit: this.config.highQuality.framerate,
-                        EncodingInterval: 1,
-                        BitrateLimit: this.config.highQuality.bitrate
-                    },
-                    H264: {
-                        GovLength: this.config.highQuality.framerate,
-                        H264Profile: 'Main'
-                    },
-                    SessionTimeout: 'PT1000S'
-                }
+                VideoEncoderConfiguration: mainStreamEncoderConfig
             }
         ];
 
         if (this.config.lowQuality) {
+            // Build SubStream profile with configurable encoding parameters
+            const subStreamEncoderConfig = {
+                attributes: {
+                    token: 'encoder_lq_config_token'
+                },
+                Name: 'CardinalLqCameraConfiguration',
+                UseCount: 1,
+                Encoding: this.config.lowQuality.encoding || 'H264',
+                Resolution: {
+                    Width: this.config.lowQuality.width,
+                    Height: this.config.lowQuality.height
+                },
+                Quality: this.config.lowQuality.quality,
+                RateControl: {
+                    FrameRateLimit: this.config.lowQuality.framerate,
+                    EncodingInterval: this.config.lowQuality.encodingInterval || 1,
+                    BitrateLimit: this.config.lowQuality.bitrate
+                },
+                SessionTimeout: 'PT1000S'
+            };
+
+            // Add codec-specific configuration
+            const subEncoding = this.config.lowQuality.encoding || 'H264';
+            if (subEncoding === 'H264') {
+                subStreamEncoderConfig.H264 = {
+                    GovLength: this.config.lowQuality.govLength || this.config.lowQuality.framerate,
+                    H264Profile: this.config.lowQuality.profile || 'Main'
+                };
+            } else if (subEncoding === 'MPEG4') {
+                subStreamEncoderConfig.MPEG4 = {
+                    GovLength: this.config.lowQuality.govLength || this.config.lowQuality.framerate,
+                    Mpeg4Profile: this.config.lowQuality.profile || 'SP'
+                };
+            } else if (subEncoding === 'H265') {
+                // For H265, use Profile T style (generic fields) even though we're in Profile S
+                // This is a vendor extension approach
+                subStreamEncoderConfig.GovLength = this.config.lowQuality.govLength || this.config.lowQuality.framerate;
+                subStreamEncoderConfig.Profile = this.config.lowQuality.profile || 'Main';
+            }
+
             this.profiles.push(
                 {
                     Name: 'SubStream',
@@ -122,29 +180,7 @@ class OnvifServer {
                         SourceToken: 'video_src_token',
                         Bounds: { attributes: { x: 0, y: 0, width: this.config.highQuality.width, height: this.config.highQuality.height } }
                     },
-                    VideoEncoderConfiguration: {
-                        attributes: {
-                            token: 'encoder_lq_config_token'
-                        },
-                        Name: 'CardinalLqCameraConfiguration',
-                        UseCount: 1,
-                        Encoding: 'H264',
-                        Resolution: {
-                            Width: this.config.lowQuality.width,
-                            Height: this.config.lowQuality.height
-                        },
-                        Quality: this.config.lowQuality.quality,
-                        RateControl: {
-                            FrameRateLimit: this.config.lowQuality.framerate,
-                            EncodingInterval: 1,
-                            BitrateLimit: this.config.lowQuality.bitrate
-                        },
-                        H264: {
-                            GovLength: this.config.lowQuality.framerate,
-                            H264Profile: 'Main'
-                        },
-                        SessionTimeout: 'PT1000S'
-                    }
+                    VideoEncoderConfiguration: subStreamEncoderConfig
                 }
             );
         }
@@ -391,18 +427,42 @@ class OnvifServer {
         this.server = http.createServer(this.listen);
         this.server.listen(this.config.ports.server, this.config.hostname);
 
+        // Add HTTP server error handler
+        this.server.on('error', (err) => {
+            this.logger.error(`HTTP Server error for ${this.config.name}:`, err);
+        });
+
+        // Read WSDL files and replace hardcoded locations with actual camera addresses
+        const deviceWsdl = fs.readFileSync('./wsdl/device_service.wsdl', 'utf8')
+            .replace(/http:\/\/localhost:8000\/onvif\/device_service/g,
+                     `http://${this.config.hostname}:${this.config.ports.server}/onvif/device_service`);
+
+        const mediaWsdl = fs.readFileSync('./wsdl/media_service.wsdl', 'utf8')
+            .replace(/http:\/\/localhost:8000\/onvif\/media_service/g,
+                     `http://${this.config.hostname}:${this.config.ports.server}/onvif/media_service`);
+
         this.deviceService = soap.listen(this.server, {
-            path: '/onvif/device_service', 
+            path: '/onvif/device_service',
             services: this.onvif,
-            xml: fs.readFileSync('./wsdl/device_service.wsdl', 'utf8'),
+            xml: deviceWsdl,
             forceSoap12Headers: true
         });
 
+        // Add SOAP error handler
+        this.deviceService.on('error', (err) => {
+            this.logger.error(`DeviceService SOAP error for ${this.config.name}:`, err);
+        });
+
         this.mediaService = soap.listen(this.server, {
-            path: '/onvif/media_service', 
+            path: '/onvif/media_service',
             services: this.onvif,
-            xml: fs.readFileSync('./wsdl/media_service.wsdl', 'utf8'),
+            xml: mediaWsdl,
             forceSoap12Headers: true
+        });
+
+        // Add SOAP error handler
+        this.mediaService.on('error', (err) => {
+            this.logger.error(`MediaService SOAP error for ${this.config.name}:`, err);
         });
     }
 

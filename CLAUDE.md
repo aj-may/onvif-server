@@ -81,13 +81,26 @@ Each camera config has:
 - `ports` - server (Onvif), rtsp, snapshot ports
 - `name` - Display name
 - `uuid` - Unique device identifier (UUIDv4)
-- `highQuality/lowQuality` - Stream config with rtsp path, snapshot path, resolution, framerate, bitrate, quality
+- `highQuality/lowQuality` - Stream config with:
+  - `rtsp` - RTSP path for the stream
+  - `snapshot` - Snapshot URL path (optional)
+  - `width`, `height` - Resolution in pixels
+  - `framerate` - Frame rate in fps
+  - `bitrate` - Bitrate in kbps
+  - `quality` - Quality level (1.0-5.0)
+  - `encoding` - Video codec (optional, defaults to 'H264'). Supported: 'H264', 'H265', 'MPEG4', 'JPEG'
+  - `govLength` - GOP (Group of Pictures) length in frames (optional, defaults to framerate value)
+  - `profile` - Codec profile (optional, defaults to 'Main' for H264). Examples: 'Baseline', 'Main', 'High'
+  - `encodingInterval` - Frame encoding interval (optional, defaults to 1, meaning every frame is encoded)
 - `target` - Real device hostname and ports
+
+**Note on encoding parameters**: These optional parameters allow you to accurately describe the actual stream encoding. If omitted, reasonable defaults are used. Most VMS clients will detect actual stream parameters from RTSP negotiation even if ONVIF metadata doesn't match exactly.
 
 ### Onvif Profile S Implementation
 
 The server implements a minimal Onvif Profile S (streaming) with:
-- H.264 encoding (Main profile)
+- Video encoding support: H.264, H.265/HEVC (vendor extension), MPEG-4, MJPEG
+- Configurable codec profiles (Baseline/Main/High for H.264)
 - RTP-RTSP-TCP transport
 - GetSystemDateAndTime (handles timezones and DST)
 - GetCapabilities (Device, Media)
@@ -99,6 +112,8 @@ The server implements a minimal Onvif Profile S (streaming) with:
 - GetSnapshotUri (returns http:// URL)
 
 WS-Discovery responds to Probe messages for NetworkVideoTransmitter devices.
+
+**H.265 Support**: While Profile S officially only supports H.264, this implementation allows H.265 as a vendor extension (similar to what Hikvision, Dahua, and others implemented before Profile T existed). VMS compatibility varies - test with your specific VMS.
 
 ## Important Implementation Details
 
