@@ -7,6 +7,7 @@ class DiscoveryServer {
         this.servers = servers;
         this.logger = logger;
         this.socket = null;
+        this.responseSocket = null; // Reusable socket for sending responses
         this.messageCounters = new Map(); // Track message number per device
 
         // Initialize message counters for each device
@@ -18,6 +19,7 @@ class DiscoveryServer {
 
     start() {
         this.socket = dgram.createSocket({ type: 'udp4', reuseAddr: true });
+        this.responseSocket = dgram.createSocket('udp4'); // Create reusable response socket
 
         this.socket.on('message', (message, remote) => {
             xml2js.parseString(message.toString(), { tagNameProcessors: [xml2js['processors'].stripPrefix] }, (err, result) => {
@@ -84,7 +86,7 @@ class DiscoveryServer {
                         this.messageCounters.set(info.uuid, messageNo + 1);
 
                         const responseBuffer = Buffer.from(response);
-                        dgram.createSocket('udp4').send(responseBuffer, 0, responseBuffer.length, remote.port, remote.address);
+                        this.responseSocket.send(responseBuffer, 0, responseBuffer.length, remote.port, remote.address);
                     });
                 }
             });
@@ -122,6 +124,10 @@ class DiscoveryServer {
         if (this.socket) {
             this.socket.close();
             this.socket = null;
+        }
+        if (this.responseSocket) {
+            this.responseSocket.close();
+            this.responseSocket = null;
         }
     }
 }

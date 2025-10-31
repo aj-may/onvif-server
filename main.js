@@ -35,6 +35,17 @@ if (args) {
     if (args.debug)
         logger.setLevel('trace');
 
+    // Global error handlers to catch uncaught errors
+    process.on('uncaughtException', (err) => {
+        logger.error('Uncaught Exception:', err);
+        logger.error('Stack:', err.stack);
+    });
+
+    process.on('unhandledRejection', (reason, promise) => {
+        logger.error('Unhandled Rejection at:', promise);
+        logger.error('Reason:', reason);
+    });
+
     if (args.version) {
         logger.info('Version: ' + package.version);
         return;
@@ -95,7 +106,7 @@ if (args) {
             return -1;
         }
 
-        let proxies = {};
+        let proxies = [];
         let servers = [];
         const useDirectUrls = config.useDirectUrls || false;
 
@@ -104,60 +115,66 @@ if (args) {
             logger.info('');
         }
 
-        for (let onvifConfig of config.onvif) {
-            let server = onvifServer.createServer(onvifConfig, logger, useDirectUrls);
-            if (server.getHostname()) {
-                logger.info(`Starting virtual onvif server for ${onvifConfig.name} on ${onvifConfig.mac} ${server.getHostname()}:${onvifConfig.ports.server} ...`);
-                server.startServer();
-                if (args.debug)
-                    server.enableDebugOutput();
+        // Helper function to delay between camera startups
+        const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+        (async () => {
+            for (let onvifConfig of config.onvif) {
+                let server = onvifServer.createServer(onvifConfig, logger, useDirectUrls);
+                if (server.getHostname()) {
+                    logger.info(`Starting virtual onvif server for ${onvifConfig.name} on ${onvifConfig.mac} ${server.getHostname()}:${onvifConfig.ports.server} ...`);
+                    server.startServer();
+                    if (args.debug)
+                        server.enableDebugOutput();
+                    logger.info('  Started!');
+                    logger.info('');
+
+                    servers.push(server);
+
+                    // Add 2 second delay between camera startups to avoid concurrent WSDL fetching
+                    await sleep(2000);
+
+                    // Only set up proxies if not using direct URLs
+                    if (!useDirectUrls) {
+                        if (onvifConfig.ports.rtsp && onvifConfig.target.ports.rtsp)
+                            proxies.push({
+                                sourceHostname: server.getHostname(),
+                                sourcePort: onvifConfig.ports.rtsp,
+                                targetHostname: onvifConfig.target.hostname,
+                                targetPort: onvifConfig.target.ports.rtsp
+                            });
+                        if (onvifConfig.ports.snapshot && onvifConfig.target.ports.snapshot)
+                            proxies.push({
+                                sourceHostname: server.getHostname(),
+                                sourcePort: onvifConfig.ports.snapshot,
+                                targetHostname: onvifConfig.target.hostname,
+                                targetPort: onvifConfig.target.ports.snapshot
+                            });
+                    }
+                } else {
+                    logger.error(`Failed to find IP address for MAC address ${onvifConfig.mac}`)
+                    return -1;
+                }
+            }
+
+            // Start centralized discovery server for all virtual devices
+            if (servers.length > 0) {
+                logger.info('Starting WS-Discovery server for all virtual devices ...');
+                const discovery = discoveryServer.createDiscoveryServer(servers, logger);
+                discovery.start();
                 logger.info('  Started!');
                 logger.info('');
-
-                servers.push(server);
-
-                // Only set up proxies if not using direct URLs
-                if (!useDirectUrls) {
-                    if (!proxies[onvifConfig.target.hostname])
-                        proxies[onvifConfig.target.hostname] = {}
-
-                    if (onvifConfig.ports.rtsp && onvifConfig.target.ports.rtsp)
-                        proxies[onvifConfig.target.hostname][onvifConfig.ports.rtsp] = {
-                            port: onvifConfig.target.ports.rtsp,
-                            hostname: server.getHostname()
-                        };
-                    if (onvifConfig.ports.snapshot && onvifConfig.target.ports.snapshot)
-                        proxies[onvifConfig.target.hostname][onvifConfig.ports.snapshot] = {
-                            port: onvifConfig.target.ports.snapshot,
-                            hostname: server.getHostname()
-                        };
-                }
-            } else {
-                logger.error(`Failed to find IP address for MAC address ${onvifConfig.mac}`)
-                return -1;
             }
-        }
 
-        // Start centralized discovery server for all virtual devices
-        if (servers.length > 0) {
-            logger.info('Starting WS-Discovery server for all virtual devices ...');
-            const discovery = discoveryServer.createDiscoveryServer(servers, logger);
-            discovery.start();
-            logger.info('  Started!');
-            logger.info('');
-        }
-        
-        for (let destinationAddress in proxies) {
-            for (let sourcePort in proxies[destinationAddress]) {
-                const proxyInfo = proxies[destinationAddress][sourcePort];
-                logger.info(`Starting tcp proxy from ${proxyInfo.hostname}:${sourcePort} to ${destinationAddress}:${proxyInfo.port} ...`);
-                tcpProxy.createProxy(sourcePort, destinationAddress, proxyInfo.port, {
-                    hostname: proxyInfo.hostname
+            for (let proxy of proxies) {
+                logger.info(`Starting tcp proxy from ${proxy.sourceHostname}:${proxy.sourcePort} to ${proxy.targetHostname}:${proxy.targetPort} ...`);
+                tcpProxy.createProxy(proxy.sourcePort, proxy.targetHostname, proxy.targetPort, {
+                    hostname: proxy.sourceHostname
                 });
                 logger.info('  Started!');
                 logger.info('');
             }
-        }
+        })();
 
     } else {
         logger.error('Please specifiy a config filename!');
